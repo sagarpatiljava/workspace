@@ -1,0 +1,6 @@
+1583658370437	Move compilation unit
+1583659657512	Rename type 'InitAuthHeader'
+1583659753227	Rename type 'ResponseHeader'
+1583662998576	Move compilation unit
+1583663004136	Move compilation unit
+1583663186315	Encapsulate field 'header'

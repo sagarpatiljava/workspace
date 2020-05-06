@@ -1,0 +1,323 @@
+package com.rakuten.ecdsa;
+
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.math.BigInteger;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+import java.security.KeyPair;
+import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.Signature;
+import java.security.SignatureException;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
+import java.security.cert.CertificateFactory;
+import java.security.interfaces.ECPublicKey;
+import java.security.spec.ECGenParameterSpec;
+import java.security.spec.ECPoint;
+import java.security.spec.ECPublicKeySpec;
+import java.security.spec.InvalidKeySpecException;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.bouncycastle.jce.ECNamedCurveTable;
+import org.bouncycastle.jce.ECPointUtil;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.jce.spec.ECNamedCurveParameterSpec;
+import org.bouncycastle.jce.spec.ECNamedCurveSpec;
+import org.bouncycastle.jce.spec.ECParameterSpec;
+import org.bouncycastle.jce.spec.ECPrivateKeySpec;
+
+import com.rakuten.utils.utils;
+
+public class EcdsaCrypto {
+
+
+	public EcdsaCrypto() {
+		super();
+		// TODO Auto-generated constructor stub
+	}
+
+
+	public static Map<String, String> generateEckaKeyPairs(String curve) throws InvalidAlgorithmParameterException, NoSuchAlgorithmException {
+		
+		Map<String,String> keyMap = new HashMap<>();
+		//ECGenParameterSpec ecSpec = new ECGenParameterSpec("secp256r1");
+		ECGenParameterSpec ecSpec = new ECGenParameterSpec(curve);
+		KeyPairGenerator kf = KeyPairGenerator.getInstance("ECDSA",new BouncyCastleProvider());
+		kf.initialize(ecSpec);
+		KeyPair keyPair = kf.generateKeyPair();
+		PrivateKey priv = keyPair.getPrivate();
+		PublicKey  pub  = keyPair.getPublic();
+		String PrivateKeyStr = utils.byteArrayToHex(priv.getEncoded());
+		String PublicKeyStr  = utils.byteArrayToHex(pub.getEncoded());
+		
+		keyMap.put("PrivateKeyStr", PrivateKeyStr);
+		keyMap.put("PublicKeyStr",PublicKeyStr);
+		return keyMap;
+	}
+
+	public static  Map<String, String> generateECKeys(String curve) {
+	    try {
+	    	Map<String,String> keyMap = new HashMap<>();
+	        ECNamedCurveParameterSpec parameterSpec = ECNamedCurveTable.getParameterSpec(curve);
+	        //KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(
+	        //        "ECDH", new BouncyCastleProvider());
+	        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(
+	                "ECDH", new BouncyCastleProvider());
+	
+	        keyPairGenerator.initialize(parameterSpec);
+	        KeyPair keyPair = keyPairGenerator.generateKeyPair();
+	       
+	        //return keyPair;
+	        String PrivateKeyStr = utils.byteArrayToHex(keyPair.getPrivate().getEncoded());
+			String PublicKeyStr  = utils.byteArrayToHex(keyPair.getPublic().getEncoded());
+			
+			
+//			System.out.println("1\t"+(PrivateKeyStr));
+//			System.out.println("2\t"+(PublicKeyStr));
+			
+			keyMap.put("PrivateKeyStr", extractPrivateKeyHex(PrivateKeyStr));
+			keyMap.put("PublicKeyStr",  extractPublicKeyHex(PublicKeyStr));
+			return keyMap;
+	        
+	    } catch (NoSuchAlgorithmException | InvalidAlgorithmParameterException e) {
+	        e.printStackTrace();
+	        return null;
+	    }
+	}
+	
+	/**
+	 * Verify signature
+	 * @param publicKey Certificate B64 (String)
+	 * @param message (String)
+	 * @param sign (String)
+	 * @return
+	 * @throws Exception
+	 */
+	public static boolean verifySignatureECDSAB64(String certPkEcdsaB64,
+			String message,
+			String sign,
+			String curve) throws Exception {
+
+
+
+		String pkEcdsa = extractPublicKeyFromPublicKeyCertificateB64(certPkEcdsaB64);
+		System.out.println("Extracted PK from cert:\t"+pkEcdsa);
+
+		//PublicKey publick = getPublicKeyFromHex(utils.hexStringToByteArray(pkEcdsa),"brainpoolP256r1");
+		PublicKey publick = getPublicKeyFromHex(utils.hexStringToByteArray(pkEcdsa),curve);
+		return verifySignature(publick,message,sign);
+	}
+
+	/**
+	 * Verify signature
+	 * 
+	 * @param publicKey Certificate (String)
+	 * @param message (String)
+	 * @param sign (String)
+	 * @return
+	 * @throws Exception
+	 */
+	/*public static boolean verifySignatureECDSAb64(String certPkEcdsa,
+			String message,
+			String sign) throws Exception {
+
+		String pkEcdsa = extractPublicKeyFromPublicKeyCertificateB64(certPkEcdsa);
+		System.out.println("Extracted PK from cert:\t"+pkEcdsa);
+		PublicKey publick = getPublicKeyFromHex(utils.hexStringToByteArray(pkEcdsa),"brainpoolP256r1");
+		return verifySignature(publick,message,sign);
+	}*/
+	
+	/**
+	 * Verify signature
+	 * 
+	 * @param publicKey Certificate (String)
+	 * @param message (String)
+	 * @param sign (String)
+	 * @return
+	 * @throws Exception
+	 */
+	public static boolean verifySignatureUsingPKCert(String certPkEcdsa,
+			String message,
+			String sign,
+			String curve) throws Exception {
+
+		String pkEcdsa = extractPublicKeyFromPublicKeyCertificate(certPkEcdsa);
+		System.out.println("Extracted PK from cert:\t"+pkEcdsa);
+		PublicKey publick = getPublicKeyFromHex(utils.hexStringToByteArray(pkEcdsa),curve);
+		return verifySignature(publick,message,sign);
+	}
+	
+	
+	public static boolean verifySignatureUsingPK(String pkEcdsa,
+			String message,
+			String sign,
+			String curve) throws Exception {
+
+		PublicKey publick = getPublicKeyFromHex(utils.hexStringToByteArray(pkEcdsa),curve);
+		return verifySignature(publick,message,sign);
+		//return verifySignature(pkEcdsa,message,sign);
+	}
+
+	/**
+     * Generate ECDSA Signature In B64 
+     *
+     * @param  privateKeyInB64(String):   ECDSA Private Key in B64 Format 
+     * @param  msg(String):   Message to be Signed
+     * @param  curve(String):   Curve Name Corresponding to Private Key
+     * @return Signature(String): ECDSA Signature in B64
+     */
+	public static String generateSignatureB64(String privateKeyInB64, 
+			String msg,
+			String curve) throws InvalidKeyException, NoSuchAlgorithmException, NoSuchProviderException, SignatureException, UnsupportedEncodingException {
+		BigInteger privateKey = new BigInteger(extractPrivateKey(privateKeyInB64), 16);
+		PrivateKey privateK   = getPrivateKeyFromHex(privateKey, curve);
+		String signature      = generateSignature(privateK,msg);
+		return Base64.getEncoder().encodeToString(utils.hexStringToByteArray(signature));
+		//return signature;
+
+	}
+
+	
+	/**
+     * Generate ECDSA Signature In HexString 
+     *
+     * @param  privateKeyInB64(String):   ECDSA Private Key in B64 Format 
+     * @param  msg(String):   Message to be Signed
+     * @param  curve(String):   Curve Name Corresponding to Private Key
+     * @return Signature(String): ECDSA Signature in HexString
+     */
+	public static String generateSignature(String sk, 
+			String msg,
+			String curve) throws InvalidKeyException, NoSuchAlgorithmException, NoSuchProviderException, SignatureException, UnsupportedEncodingException {
+		BigInteger privateKey = new BigInteger(extractPrivateKey(sk), 16);
+		PrivateKey privateK   = getPrivateKeyFromHex(privateKey, curve);
+		String signature      = generateSignature(privateK,msg);
+		return signature;
+
+	}
+
+	public static String generateSignature(PrivateKey sk, 
+			String msg) throws NoSuchAlgorithmException, 
+	NoSuchProviderException, 
+	InvalidKeyException, 
+	SignatureException, 
+	UnsupportedEncodingException {
+		Signature ecdsaSign = Signature.getInstance("SHA256withECDSA", new BouncyCastleProvider());
+		ecdsaSign.initSign(sk);
+		ecdsaSign.update(msg.getBytes("UTF-8"));
+		byte[] signature = ecdsaSign.sign();
+		return utils.byteArrayToHex(signature);
+	}
+
+	public static PrivateKey getPrivateKeyFromHex(BigInteger s, String curveName) {
+
+		ECParameterSpec ecParameterSpec = ECNamedCurveTable.getParameterSpec(curveName);
+		ECPrivateKeySpec privateKeySpec = new ECPrivateKeySpec(s, ecParameterSpec);
+		try {
+			//KeyFactory keyFactory = KeyFactory.getInstance(EC);
+			KeyFactory keyFactory = KeyFactory.getInstance("ECDSA", new BouncyCastleProvider());
+			return keyFactory.generatePrivate(privateKeySpec);
+		} catch (NoSuchAlgorithmException | InvalidKeySpecException e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+
+	/*
+	 * public static PublicKey generateEccPublicKey(ECParameterSpec params, final
+	 * byte[] pubkey) throws NoSuchAlgorithmException, InvalidKeySpecException {
+	 * 
+	 * int keySizeBytes = params.getOrder().bitLength() / Byte.SIZE; int offset = 0;
+	 * BigInteger x = new BigInteger(1, Arrays.copyOfRange(pubkey, offset, offset +
+	 * keySizeBytes)); offset += keySizeBytes; BigInteger y = new BigInteger(1,
+	 * Arrays.copyOfRange(pubkey, offset, offset + keySizeBytes)); ECPoint w = new
+	 * ECPoint(x, y); KeyFactory keyfac = KeyFactory.getInstance("ECDSA", new
+	 * BouncyCastleProvider()); ECPublicKeySpec publicKeySpec = new
+	 * ECPublicKeySpec(w, params); return (PublicKey)
+	 * keyfac.generatePublic(publicKeySpec);
+	 * 
+	 * }
+	 */
+
+	//private static PublicKey getPublicKeyFromHex(byte[] pubKey) throws NoSuchAlgorithmException, NoSuchProviderException, InvalidKeySpecException {
+	//    KeyFactory fact = KeyFactory.getInstance("ECDSA", new BouncyCastleProvider());
+	//    return fact.generatePublic(new X509EncodedKeySpec(pubKey));
+	//}
+
+	private static PublicKey getPublicKeyFromHex(byte[] pubKey,String curveName) throws NoSuchAlgorithmException, InvalidKeySpecException {
+		ECNamedCurveParameterSpec spec = ECNamedCurveTable.getParameterSpec(curveName);
+
+		KeyFactory kf = KeyFactory.getInstance("ECDSA", new BouncyCastleProvider());
+		ECNamedCurveSpec params = new ECNamedCurveSpec(curveName, spec.getCurve(), spec.getG(), spec.getN());
+		ECPoint point =  ECPointUtil.decodePoint(params.getCurve(), pubKey);
+		ECPublicKeySpec pubKeySpec = new ECPublicKeySpec(point, params);
+		ECPublicKey pk = (ECPublicKey) kf.generatePublic(pubKeySpec);
+		return pk;
+	}
+
+
+	public static boolean verifySignature(PublicKey pk, String msg, String signature) throws NoSuchAlgorithmException, InvalidKeyException, SignatureException, UnsupportedEncodingException {
+		Signature ecdsaVerify = Signature.getInstance("SHA256withECDSA", new BouncyCastleProvider());
+		ecdsaVerify.initVerify(pk);
+		ecdsaVerify.update(msg.getBytes("UTF-8"));
+		return ecdsaVerify.verify(utils.hexStringToByteArray(signature));
+	}
+
+	public static String extractPublicKeyFromPublicKeyCertificateB64(String publicKeyCertificate) 
+			throws CertificateException {
+
+		InputStream in = null;
+		Certificate cert = null;
+		byte[] certificateData = Base64.getDecoder().decode(publicKeyCertificate); 
+		in = new ByteArrayInputStream(certificateData);
+		CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
+		cert = certFactory.generateCertificate( in );
+		String pubkey = utils.byteArrayToHex(cert.getPublicKey().getEncoded());
+		int offset = pubkey.indexOf("0004");
+		return pubkey.substring(offset+2);
+	}
+
+	public static String extractPublicKeyFromPublicKeyCertificate(String publicKeyCertificate) 
+			throws CertificateException {
+
+		InputStream in = null;
+		Certificate cert = null;
+		byte[] certificateData =  utils.hexStringToByteArray(publicKeyCertificate); 
+		in = new ByteArrayInputStream(certificateData);
+		CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
+		cert = certFactory.generateCertificate( in );
+		String pubkey = utils.byteArrayToHex(cert.getPublicKey().getEncoded());
+		int offset = pubkey.indexOf("0004");
+		return pubkey.substring(offset+4);
+	}
+
+	public static String extractPrivateKey(String privateKey){
+
+		String skKey = utils.byteArrayToHex(Base64.getDecoder().decode(privateKey));
+		int offset = skKey.indexOf("0420");
+		return skKey.substring(offset+4,offset+4+64);
+	}
+	
+	public static String extractPrivateKeyHex(String privateKey){
+		int offset = privateKey.indexOf("0420");
+		return privateKey.substring(offset+4,offset+4+64);
+	}
+	
+	public static String extractPublicKeyHex(String publicKey){
+		int offset = publicKey.indexOf("0004");
+		return publicKey.substring(offset+2);
+	}
+
+
+
+}
+

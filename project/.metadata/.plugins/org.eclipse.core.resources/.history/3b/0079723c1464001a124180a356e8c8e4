@@ -1,0 +1,31 @@
+package com.rakuten.utils;
+
+public class utils {
+
+	public static String searchTagandExtractValueFromIt(String Str) {
+	
+		return "";
+	}
+	
+	public static boolean isTagPresentInTLVString(String tag) {
+		return true;
+	}
+
+	
+	public static int readTagLength(String apduResponse) {
+	    int len_bytes = 0;
+	    if (apduResponse.length() > 2) {
+	        len_bytes = (apduResponse.length()) / 2;
+	    }
+	    //Log.e("tlv length:", "bytes:" + len_bytes);
+	    if (len_bytes < 128) {
+	        return 2;
+	    } else if (len_bytes > 127 && len_bytes < 255) {
+	        return 4;
+	    } else {
+	        return 6;
+	    }
+	}
+	
+	
+}

@@ -1,0 +1,230 @@
+package com.rakuten.service;
+
+import java.io.UnsupportedEncodingException;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+import java.security.SignatureException;
+import java.security.cert.CertificateException;
+import java.security.spec.InvalidKeySpecException;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import org.springframework.stereotype.Service;
+
+import com.rakuten.dto.AuthClientRequest;
+import com.rakuten.dto.AuthClientResponse;
+import com.rakuten.dto.FunctionExecutionStatus;
+import com.rakuten.dto.Header;
+import com.rakuten.dto.InitAuthResponse;
+import com.rakuten.ecdsa.EcdsaCrypto;
+import com.rakuten.sgpConstants.RspGlobal;
+import com.rakuten.sgpConstants.SGPContants;
+import com.rakuten.sgpConstants.SMDPConstants;
+import com.rakuten.utils.utils;
+
+@Service
+public class AuthClient {
+	
+	public String getAuthenticate(String usernm,String pwd) {
+		if(usernm==null || pwd==null)
+		{
+			return "fail";
+		}
+		return "success";
+	}
+	
+	public AuthClientResponse createAuthClientResonse(AuthClientRequest authClientRequest,
+													  String txId,
+													  RspGlobal rsp) throws Exception {
+	
+		String euiccSigned1 ="";
+		String euiccSignature1 ="";
+		String certEuiccECDSA ="";
+		String certEumECDSA ="";
+		
+		Map<String,Object> myMap = new HashMap<>();
+		System.out.println("<=== Inside Authenticate Client Processing===>");
+		System.out.println("TransactionId:\t"+ authClientRequest.getTransactionID());
+		System.out.println("AuthenticateServerResp:\t"+ authClientRequest.getAuthenticateServerResponse());
+		
+		//Checks
+		//1. Verify Ongoing RSP Transaction ID Matches with Transaction ID Provided in AuthenticateClient req 
+		//Note: uncomment on live Card
+		//if(!txId.equalsIgnoreCase(authClientRequest.getTransactionID()))
+		//	return createErrorResponse("8.10.1","3.9","The RSP session identified by the TransactionID is unknown");
+		
+		Map<String,String> authServresponse = utils.extractValAuthServResponse(authClientRequest.getAuthenticateServerResponse());
+		
+		//1. Extract Euicc Signed1 From AuthenticateServer Response
+		euiccSigned1 = authServresponse.get("euiccSigned1");
+		System.out.println("euiccSigned1:\t"+euiccSigned1);
+		
+		//2. Extract Euicc Signature1 From AuthenticateServer Response
+		//euiccSignature1 = authServresponse.get("euiccSignature1").substring(6);
+		euiccSignature1 = authServresponse.get("euiccSignature1");
+		System.out.println("euiccSignature1:\t"+euiccSignature1);
+		
+		String euiccSignature1Asn1 = utils.decodeSignatureAndConvertASN1Format(euiccSignature1);
+		System.out.println("euiccSignature1 ASN.1:\t"+euiccSignature1Asn1);
+		
+		//3. Extract Euicc Certificate
+		certEuiccECDSA = authServresponse.get("euiccPublicCert");		
+		System.out.println("euiccPublicCert:\t"+certEuiccECDSA);
+		
+		//4. Extract EUM Certificate
+		certEumECDSA = authServresponse.get("eumPublicCert");
+		//System.out.println("eumPublicCert:\t"+certEumECDSA);
+		
+		//5. Extract Euicc Public Key from Euicc Public Key Certificate
+		String euiccPK = "04"+EcdsaCrypto.extractPublicKeyFromPublicKeyCertificate(certEuiccECDSA);
+		System.out.println("euiccPK:\t"+euiccPK);
+		
+		rsp.setEuiccPk(euiccPK);
+		
+		String Curve = SMDPConstants.ciKeyID[0][1];
+		
+		
+		euiccSignature1Asn1 = "30440220079e914d134d5fd83d2adebd1b4c5ab0eada3bb7783347dd0820e27b5826cc8b0220685be9093ce6744565963a9c33604013d4274cd89f45b926a994c2ba9b494db2";
+		
+		//6. Verify euiccSignature 1 with euicc Public Key
+		System.out.println(EcdsaCrypto.verifySignatureUsingPK(euiccPK, 
+																euiccSigned1, 
+																euiccSignature1Asn1, 
+																Curve)); 
+		
+		
+		//7. Generate Server Signed1
+		String smdpSigned2 = generateSmdpSigned2(txId);
+		System.out.println("serverSigned2::"+smdpSigned2);
+		
+		String certDpPbEcdsa = extractCertDpPbEcdsa();
+		System.out.println("certDpPbEcdsa::"+certDpPbEcdsa);
+		
+		String skDPPb = extractSkDpPbECDSA();
+		
+		//8. Generate Server Signature2
+		String smdpSignature2 = EcdsaCrypto.generateSignatureB64(skDPPb,smdpSigned2,Curve);
+		System.out.println("smdpSignature2::"+smdpSignature2);
+		
+		
+		AuthClientResponse authResponse = new AuthClientResponse(txId, 
+																 SMDPConstants.META_DATA, 
+																 Base64.getEncoder().encodeToString(utils.hexStringToByteArray(smdpSigned2)), 
+																 Base64.getEncoder().encodeToString(utils.hexStringToByteArray(smdpSignature2)), 
+																 certDpPbEcdsa,
+																 new Header(new FunctionExecutionStatus("Executed-Success")) );
+	
+		return authResponse;
+		
+		//return createErrorResponse("8.1.2","6.1","Verification Failed");
+		
+	}
+	
+	public static AuthClientResponse createErrorResponse(String subjectCode,String reasonCode,String errorMessage) {
+		Map<String,String> failedValues = new LinkedHashMap<>();
+		failedValues.put("subjectCode", subjectCode);
+		failedValues.put("resonCode", reasonCode);
+		failedValues.put("message", errorMessage);
+		AuthClientResponse res= new AuthClientResponse(new Header(new FunctionExecutionStatus("Failed",failedValues)));
+	                                       
+		return res;
+	}
+	
+	public String extractServerSigned1(String authServerresponse) {
+		
+		byte[] authServerResponse = Base64.getDecoder().decode(authServerresponse);
+		System.out.println(utils.byteArrayToHex(authServerResponse));
+		byte[][] serverSigned1 = utils.readTLV(utils.byteArrayToHex(authServerResponse), Integer.parseInt("30", 16));
+		System.out.println(utils.byteArrayToHex(serverSigned1[0]));
+		
+		return utils.byteArrayToHex(serverSigned1[0]);
+	}
+	
+	public String extractServerSignature1(String authServerresponse) {
+		
+		byte[] authServerResponse = Base64.getDecoder().decode(authServerresponse); 
+		byte[][] serverSignature1 = utils.readTLV(utils.byteArrayToHex(authServerResponse), Integer.parseInt("5F37", 16));
+		System.out.println(utils.byteArrayToHex(serverSignature1[0]));
+		
+		return utils.byteArrayToHex(serverSignature1[0]);
+	}
+	
+	public String extractEuiccCertificate(String authServerresponse) {
+		
+		byte[] authServerResponse = Base64.getDecoder().decode(authServerresponse); 
+		byte[][] euiccCertificate = utils.readTLV(utils.byteArrayToHex(authServerResponse), Integer.parseInt("30", 16));
+		System.out.println(utils.byteArrayToHex(euiccCertificate[0]));
+		return utils.byteArrayToHex(euiccCertificate[0]);
+	}
+	
+	public String extractEumCertificate(String authServerresponse) {
+		
+		byte[] authServerResponse = Base64.getDecoder().decode(authServerresponse); 
+		byte[][] eumCertificate = utils.readTLV(utils.byteArrayToHex(authServerResponse), Integer.parseInt("30", 16));
+		System.out.println(utils.byteArrayToHex(eumCertificate[0]));
+		return utils.byteArrayToHex(eumCertificate[0]);
+	}
+	
+	
+	public String generateSmdpSigned2(String txId) {
+		
+		//String smpdSigned2 = (SGPContants.TAG_SMDP_SIGNED2 + 
+		//							utils.getLV(SGPContants.TAG_SMDP_SIGNED2_TXID  + utils.getLV("") +
+		//										SGPContants.TAG_SMDP_SIGNED2_CC_REQ_FLAG  + utils.getLV("01") +		
+		//										SGPContants.TAG_SMDP_SIGNED2_BPP_EUICC_OTPK + utils.getLV("")));
+
+		String smpdSigned2 = (SGPContants.TAG_SMDP_SIGNED2 + 
+				utils.getLV(SGPContants.TAG_SMDP_SIGNED2_TXID  + utils.getLV(txId) +
+							SGPContants.TAG_SMDP_SIGNED2_CC_REQ_FLAG  + utils.getLV("01")));
+
+		
+		return smpdSigned2;
+	}
+	
+	public String generateSmdpSignature2(String smdpSigned2,String skDpPbecdsa) throws InvalidKeyException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeySpecException, SignatureException, NoSuchProviderException, UnsupportedEncodingException {
+		return EcdsaCrypto.generateSignatureB64(skDpPbecdsa, smdpSigned2,"brainpoolP256r1");
+	}
+	
+	public String generateMetaData() {
+		
+		return SMDPConstants.META_DATA;
+	}
+	
+	public String extractCertDpPbEcdsa() {
+		return SMDPConstants.CERT_S_SM_DPpb_ECDSA_BRP;
+	}
+	
+	public String extractSkDpPbECDSA() {
+		return SMDPConstants.SK_S_SM_DPpb_ECDSA_BRP;
+	}
+	
+	public String extractCertCiECDSA() {
+		return SMDPConstants.CERT_CI_ECDSA_BRP;
+	}
+	
+	public String extractCiPkFromCertCiECDSA(String Cert) {
+		return SMDPConstants.SK_CI_ECDSA_BRP;
+	}
+	
+	public String extractEumPkFromCertEumECDSA(String Cert) throws CertificateException {
+		return EcdsaCrypto.extractPublicKeyFromPublicKeyCertificate(Cert);
+	}
+
+	public String extractEuiccPkFromCertEuiccECDSA(String Cert) throws CertificateException {
+		return EcdsaCrypto.extractPublicKeyFromPublicKeyCertificate(Cert);
+	}
+	
+	
+	public int extractValuesFromEuiccInfo1(String EuiccInfo1)
+	{
+		if (!EuiccInfo1.substring(0,4).equalsIgnoreCase("BF38"))
+            return 1;
+		
+		
+		return 0;
+	}
+}

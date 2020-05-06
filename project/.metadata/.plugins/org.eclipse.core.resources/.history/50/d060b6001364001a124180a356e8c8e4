@@ -1,0 +1,18 @@
+package com.rakuten.utils;
+
+public class utils {
+
+	public static String searchTagandExtractValueFromIt(String Str) {
+	
+		return "";
+	}
+	
+	public static boolean isTagPresentInTLVString(String Str) {
+		
+		return true;
+		
+	}
+	
+	
+	
+}

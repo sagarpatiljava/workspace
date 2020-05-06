@@ -1,0 +1,47 @@
+
+ :::::::::: ::::::::::Server side certficate and key ::::::::::::::::::::::::::::::::::::::::::::::
+#Key generation*****
+keytool -genkey -alias sagar-https-server -storetype JKS -keyalg RSA -keysize 2048 -validity 365 -keystore sagar-https-server.jks
+##Using port:
+keytool -genkeypair -alias sagar-https-server1 -keyalg RSA -keysize 2048 -storetype JKS -keystore sagar-https-server1.jks -validity 3650 -ext SAN=dns:localhost,ip:127.0.0.1
+
+**********Export keypair into certificate******
+
+keytool -export -alias nsagar-https-server1 -file sagar-https-server1.crt -keystore sagar-https-server1.jks
+
+
+keytool -list -keystore sagar-https-server.jks
+
+****Import certificate into trustore****
+
+keytool -import -trustcacerts -keystore C:\Users\spatil28\Development\java-se-8u41-ri\jre\lib\security\cacerts -storepass changeit -noprompt -alias sagar-https-client -file C:\Users\spatil28\Development\java-se-8u41-ri\bin\agar-https-client.cer
+
+
+
+##Using personal truststore sae as keystore
+
+
+##Listing certificates in keystore
+keytool -list -keystore C:\Users\spatil28\Development\java-se-8u41-ri\jre\lib\security\cacerts
+keytool -list -keystore sagar-https-server1.jks
+********Iporting certificates into Browser : PKCS12 format only ******
+keytool -importkeystore -srckeystore sagar-https-server1.jks -destkeystore sagar-https-server1.p12 -srcstoretype JKS -deststoretype PKCS12 -srcstorepass password -deststorepass password -srcalias sagar-https-server1 -destalias sagar-https-server1 -srckeypass password -destkeypass password -noprompt
+
+:::::::::::::::::::::::::::::::::Client side certficate::::::::::::::::::::::::::::::::::::::;;
+##KEy generation
+keytool -genkey -alias sagar-https-client -storetype JKS -keyalg RSA -keysize 2048 -validity 365 -keystore sagar-https-client.jks
+keytool -genkeypair -alias sagar-https-client1 -keyalg RSA -keysize 2048 -storetype JKS -keystore sagar-https-client1.jks -validity 3650 -ext SAN=dns:localhost,ip:127.0.0.1
+
+##Export to certificate
+keytool -export -storepass password -alias sagar-https-client  -storetype JKS -file agar-https-client.cer -keystore sagar-https-client.jks
+keytool -export -alias nsagar-https-client1 -file sagar-https-client1.crt -keystore sagar-https-client1.jks
+
+##Import certificates into server side keystore
+
+keytool -import -alias nsagar-https-client1 -file nsagar-https-client1.crt -keystore sagar-https-server1.jks
+
+##Immport into browser : PKCS12 only :
+
+keytool -importkeystore -srckeystore sagar-https-client1.jks -destkeystore sagar-https-client1.p12 -srcstoretype JKS -deststoretype PKCS12 -srcstorepass password -deststorepass password -srcalias sagar-https-client1 -destalias sagar-https-client1 -srckeypass password -destkeypass password -noprompt
+
+keytool -v -importkeystore -srckeystore whateverthefileis.p12 -srcstoretype PKCS12 -destkeystore mykeystore -deststoretype JKS

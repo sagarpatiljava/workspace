@@ -1,0 +1,346 @@
+package com.rakuten.utils;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import com.rakuten.dto.AuthClientResponse;
+
+public class utils {
+
+	private static String hexString = "0123456789ABCDEF";
+
+	public static String searchTagandExtractValueFromIt(String Str) {
+
+		return "";
+	}
+
+	public static boolean isTagPresentInTLVString(String tag) {
+		return true;
+	}
+
+
+	public static int readTagLength(String apduResponse) {
+		int len_bytes = 0;
+		if (apduResponse.length() > 2) {
+			len_bytes = (apduResponse.length()) / 2;
+		}
+		//Log.e("tlv length:", "bytes:" + len_bytes);
+		if (len_bytes < 128) {
+			return 2;
+		} else if (len_bytes > 127 && len_bytes < 255) {
+			return 4;
+		} else {
+			return 6;
+		}
+	}
+
+	/**
+	 * encoding a character string to hex String
+	 * @param str
+	 * @return
+	 */
+	public static String encodeStringToHexString(String str) {
+		//String hexString = "0123456789ABCDEF";
+		byte[] bytes = str.getBytes();
+		StringBuilder sb = new StringBuilder(bytes.length * 2);
+		for (int i = 0; i < bytes.length; i++) {
+			sb.append(hexString.charAt((bytes[i] & 0xf0) >> 4));
+			sb.append(hexString.charAt((bytes[i] & 0x0f) >> 0));
+		}
+		return sb.toString();
+	}
+
+
+	public static int extractLengthofValueOfTLVString(String tlvHexString) {
+		byte[] tlv = hexStringToByteArray(tlvHexString);
+		if (tlv == null || tlv.length < 1) {
+			throw new IllegalArgumentException("Invalid TLV");
+		}
+
+		if(tlv[0] == 0xBF)
+			System.out.println("Yes");
+
+
+		return 0;
+	}
+
+	/**
+	 * decoding a hex string to character string
+	 * @param bytes
+	 * @return
+	 */
+	public static String decodeHexStringToString(String bytes) {
+		ByteArrayOutputStream baos = new ByteArrayOutputStream(bytes.length() / 2);
+		for (int i = 0; i < bytes.length(); i += 2)
+			baos.write((hexString.indexOf(bytes.charAt(i)) << 4 | hexString.indexOf(bytes.charAt(i + 1))));
+		return new String(baos.toByteArray());
+	}
+
+	/**
+	 * Reads TLV values for a given hex string.
+	 */
+	public static byte[][] readTLV(String tlvHexString, int tag) {
+		return readTLV(hexStringToByteArray(tlvHexString), tag);
+	}
+
+	/**
+	 * Reads TLV values for a given byte array.
+	 */
+	public static byte[][] readTLV(byte[] tlv, int tag) {
+		if (tlv == null || tlv.length < 1) {
+			throw new IllegalArgumentException("Invalid TLV");
+		}
+
+		int c = 0;
+		ArrayList al = new ArrayList();
+
+		ByteArrayInputStream is = null;
+		try {
+			is = new ByteArrayInputStream(tlv);
+
+			while ((c = is.read()) != -1) {
+				if (c == tag){
+					//log.debug("Got tag");
+					if ((c = is.read()) != -1){
+						byte[] value = new byte[c];
+						is.read(value,0,c);
+						al.add(value);
+					}
+				}
+			}
+		} finally {
+			if (is != null) {
+				try{
+					is.close();
+				}catch (IOException e){
+					//log.error(e);
+				}
+			}
+		}
+		//log.debug("Got " + al.size() + " values for tag "  + Integer.toHexString(tag));
+		byte[][] vals = new byte[al.size()][];
+		al.toArray(vals);
+		return vals;
+	}
+
+	/**
+	 * Converts a hex string to byte array.
+	 */
+	public static byte[] hexStringToByteArray(String s) { 
+		int len = s.length(); 
+		byte[] data = new byte[len / 2]; 
+		for (int i = 0; i < len; i += 2) { 
+			data[i / 2] = (byte) ((Character.digit(s.charAt(i), 16) << 4) 
+					+ Character.digit(s.charAt(i+1), 16)); 
+		} 
+		return data; 
+	}
+
+
+
+	public static String getLV(String Data){
+		return String.format("%02X", (Data.length()/2))+Data;
+
+	}
+
+	public static String byteArrayToHex(byte[] a) {
+		StringBuilder sb = new StringBuilder(a.length * 2);
+		for(byte b: a)
+			sb.append(String.format("%02x", b));
+		return sb.toString();
+	}
+
+	public static String genearteChallenge() {
+		byte [] serverChallenge = new byte[18];
+		SecureRandom sr = new SecureRandom();
+		sr.nextBytes(serverChallenge);
+		//return serverChallenge.toString();
+		return byteArrayToHex(serverChallenge).toUpperCase();
+
+	}
+
+	public static String genearteTransactionId() {
+		byte [] serverChallenge = new byte[16];
+		SecureRandom sr = new SecureRandom();
+		sr.nextBytes(serverChallenge);
+		//return serverChallenge.toString();
+		return byteArrayToHex(serverChallenge).toUpperCase();
+
+	}
+
+	public static int calculateOffset(int len) {
+
+		if (len>255)
+			return 6;
+		else if((len>128) && (len <=255))
+			return 4;
+		else
+			return 2;	
+	}
+
+	public static int calculateLengthFromLVString(String str) {
+		int offset,length=0;
+		String len="";
+		if (str.substring(0, 2).equalsIgnoreCase("81")) {
+			len = str.substring(2, 4);
+			return Integer.parseInt(len,16)*2; //String.format("%02X", len);
+		}
+		else if(str.substring(0, 2).equalsIgnoreCase("82")) {
+			len = str.substring(2, 6);
+			return Integer.parseInt(len,16)*2;
+		}
+		else {
+			len = str.substring(0, 2);
+			return Integer.parseInt(len,16)*2;
+		}
+	}
+
+	public static int len(String str) {
+		return str.length();
+	}
+
+	public static Map<String,String> extractValAuthServResponse(String authResp) {
+
+		int length =0;
+		int offset =0;
+		int length1 =0;
+		int offset1 =0;
+		String euiccSigned1 = "";
+		String euiccSignature1 = "";
+		String euiccPublicCert ="";
+		String eumPublicCert ="";
+
+		String authenticateRespons = byteArrayToHex(Base64.getDecoder().decode(authResp));
+		Map<String,String> ParsedValue = new LinkedHashMap<>();
+
+		if(!authenticateRespons.substring(0,4).equalsIgnoreCase("BF38")) {
+			System.out.println("1");
+			return null;
+		}
+		length = calculateLengthFromLVString(authenticateRespons.substring(4));
+		offset = calculateOffset(length);
+		offset = offset + len("BF38");
+
+		if(!authenticateRespons.substring(offset,offset + len("A0")).equalsIgnoreCase("A0")) {
+			System.out.println("2");
+			return null;
+		}
+		length1 = calculateLengthFromLVString(authenticateRespons.substring(offset + len("A0")));			 
+		offset1 =  calculateOffset(length1);
+		offset = offset + len("A0") + offset1;
+
+		//1. Extract EuiccSigned1
+		if(!authenticateRespons.substring(offset,offset + len("30")).equalsIgnoreCase("30")) {
+			System.out.println("3");
+			return null;}
+		length1 = calculateLengthFromLVString(authenticateRespons.substring(offset + len("30")));			 
+		offset1 =  calculateOffset(length1);
+		euiccSigned1 = authenticateRespons.substring(offset,offset + len("30") + offset1 + length1);
+		//System.out.println("euiccSigned1::"+euiccSigned1);
+		offset = offset + len("30") + offset1 + length1;
+		ParsedValue.put("euiccSigned1", euiccSigned1);
+
+		//2. Extract EuiccSignature1
+		if(!authenticateRespons.substring(offset,offset + len("5F37")).equalsIgnoreCase("5F37")) {
+			System.out.println("4");
+			return null;}
+		length1 = calculateLengthFromLVString(authenticateRespons.substring(offset + len("5F37")));			 
+		offset1 =  calculateOffset(length1);
+		euiccSignature1 = authenticateRespons.substring(offset,offset + len("5F37") + offset1 + length1);
+		//System.out.println("euiccSignature1::"+euiccSignature1);
+		offset = offset + len("5F37") + offset1 + length1;
+		ParsedValue.put("euiccSignature1", euiccSignature1);
+
+		// 3. Extract EUICC Certificate
+		//System.out.println(authenticateRespons.substring(offset,offset + len("30")));
+		if(!authenticateRespons.substring(offset,offset + len("30")).equalsIgnoreCase("30")) {
+			System.out.println("5");
+			return null;}
+		length1 = calculateLengthFromLVString(authenticateRespons.substring(offset + len("30")));			 
+		offset1 =  calculateOffset(length1);
+		euiccPublicCert = authenticateRespons.substring(offset,offset + len("30") + offset1 + length1);
+		//System.out.println("euiccPublicCert::"+euiccPublicCert);
+		ParsedValue.put("euiccPublicCert", euiccPublicCert);
+
+		// 4. Extract EUM Certificate
+		if(!authenticateRespons.substring(offset,offset + len("30")).equalsIgnoreCase("30")) {
+			System.out.println("6");
+			return null;}
+		length1 = calculateLengthFromLVString(authenticateRespons.substring(offset + len("30")));			 
+		offset1 =  calculateOffset(length1);
+		eumPublicCert = authenticateRespons.substring(offset,offset + len("30") + offset1 + length1);
+		//System.out.println("eumPublicCert::"+eumPublicCert);
+		ParsedValue.put("eumPublicCert", eumPublicCert);
+
+
+		return ParsedValue;
+
+	}
+
+	public static String generateASN1Signature(String sig) {
+		String R ="";
+		String S ="";
+		int offset=0;
+		if (sig.substring(6,8).contentEquals("20")) 
+		{
+			R = sig.substring(8,72);
+			offset = 72;
+		}
+		else {
+			R = sig.substring(10,74);
+			offset = 74;
+		}
+
+		if (sig.substring(offset+2,offset+4).contentEquals("20")) {
+			S = sig.substring(offset+4,offset+4+64);
+		}
+		else {
+			S = sig.substring(offset+6,offset+6+64);
+		}
+		return "5F3740"+R+S;
+		//return "";
+	}
+	
+	
+	public static String decodeSignatureAndConvertAS1Format(String signatureData) {
+
+		String lenR,lenS ="";
+		//String 
+		int offset = signatureData.indexOf("5F37");
+		if(offset<0) {
+			System.out.println("Invalid Signature Formt");
+			return "";
+		}
+
+		String R = signatureData.substring(6,70);
+		String S = signatureData.substring(70,134);
+
+		int n = (int) Long.parseLong(R.substring(0,2), 16);
+		if ((n & 0x80)==0x80) {
+			lenR = "022100";
+			//R = decodedSig.hex()[6:70]
+		}    		
+		else {
+			lenR = "0220";
+		}
+		n = (int) Long.parseLong(S.substring(0,2), 16);
+		if ((n & 0x80)==0x80) {
+			lenS = "022100";
+		}    		 
+		else {
+			lenS = "0220";
+		}
+
+		return "";
+
+	}
+
+
+
+}

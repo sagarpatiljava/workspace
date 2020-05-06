@@ -1,0 +1,62 @@
+package com.rakuten.utils;
+
+import java.io.ByteArrayOutputStream;
+
+public class utils {
+
+	private static String hexString = "0123456789ABCDEF";
+	
+	public static String searchTagandExtractValueFromIt(String Str) {
+	
+		return "";
+	}
+	
+	public static boolean isTagPresentInTLVString(String tag) {
+		return true;
+	}
+
+	
+	public static int readTagLength(String apduResponse) {
+	    int len_bytes = 0;
+	    if (apduResponse.length() > 2) {
+	        len_bytes = (apduResponse.length()) / 2;
+	    }
+	    //Log.e("tlv length:", "bytes:" + len_bytes);
+	    if (len_bytes < 128) {
+	        return 2;
+	    } else if (len_bytes > 127 && len_bytes < 255) {
+	        return 4;
+	    } else {
+	        return 6;
+	    }
+	}
+	
+	/**
+	 * encoding a character string to hex String
+	 * @param str
+	 * @return
+	 */
+	public static String encodeStringToHexString(String str) {
+		//String hexString = "0123456789ABCDEF";
+		byte[] bytes = str.getBytes();
+		StringBuilder sb = new StringBuilder(bytes.length * 2);
+		for (int i = 0; i < bytes.length; i++) {
+			sb.append(hexString.charAt((bytes[i] & 0xf0) >> 4));
+			sb.append(hexString.charAt((bytes[i] & 0x0f) >> 0));
+		}
+		return sb.toString();
+	}
+	
+	/**
+	 * decoding a hex string to character string
+	 * @param bytes
+	 * @return
+	 */
+	public static String decodeHexStringToString(String bytes) {
+		ByteArrayOutputStream baos = new ByteArrayOutputStream(bytes.length() / 2);
+		for (int i = 0; i < bytes.length(); i += 2)
+			baos.write((hexString.indexOf(bytes.charAt(i)) << 4 | hexString.indexOf(bytes.charAt(i + 1))));
+		return new String(baos.toByteArray());
+	}
+	
+}

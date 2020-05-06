@@ -1,0 +1,43 @@
+
+*******************Ip links ***************
+http://blog.palominolabs.com/2011/10/18/java-2-way-tlsssl-client-certificates-and-pkcs12-vs-jks-keystores/
+https://lightbend.github.io/ssl-config/KeyStores.html
+
+
+1.> Generate server keystore and use sae as truststore
+
+keytool -genkeypair -alias eSim-server -keyalg RSA -keysize 2048 -storetype PKCS12 -keystore eSim-server.p12 -validity 3650
+
+2>
+openssl pkcs12 -in C:\Users\spatil28\Development\java-se-8u41-ri\bin\eSim-server.p12 -password pass:password -nokeys -out C:\Users\spatil28\Development\java-se-8u41-ri\bin\eSim-server-public-cert.pem
+
+3> Key
+
+openssl pkcs12 -in C:\Users\spatil28\Development\java-se-8u41-ri\bin\Sim-server.p12 -password pass:password -nodes -nocerts -out C:\Users\spatil28\Development\java-se-8u41-ri\bin\eSim-server-pri.key
+
+4>
+
+openssl req -x509 -newkey rsa:4096 -keyout priv.key -out selfcert.crt -days 9125
+
+keytool -import -alias nt-gateway -file nt-gateway.crt -keystore nt-ms.jks
+
+-----------------------------------------Client
+1>
+keytool -delete -alias eSim-client -keystore eSim-client.p12 -storepass password
+keytool -genkeypair -alias eSim-client -keyalg RSA -keysize 2048 -storetype PKCS12 -keystore eSim-client.p12 -validity 3650
+
+2>
+pkcs12 -in C:\Users\spatil28\Development\java-se-8u41-ri\bin\eSim-client.p12 -password pass:password -nokeys -out C:\Users\spatil28\Development\java-se-8u41-ri\bin\eSim-client-public-cert.pem
+
+keytool -export -storepass password -alias eSim-client  -storetype PKCS12 -file eSim-client.crt -keystore eSim-client.p12
+
+keytool -import -alias eSim-client-public-cert -file eSim-client.cer -keystore eSim-client.p12 -storetype PKCS12 -storepass password
+
+keytool -v -importkeystore -srckeystore eSim-client.p12 -srcstoretype PKCS12 -destkeystore eSim-server.p12 -deststoretype PKCS12
+keytool -importkeystore -srckeystore eSim-client.p12 -destkeystore eSim-server.p12 -srcstoretype PKCS12 -deststoretype PKCS12 -srcstorepass password -deststorepass password -srcalias eSim-client -destalias eSim-server -srckeypass password -destkeypass password -noprompt
+
+keytool -list -keystore eSim-server.p12 -storetype PKCS12
+
+keytool -import  -trustcacerts -file eSim-client.crt -password password -keystore eSim-server.p12 -storetype PKCS12 -storepass password
+
+keytool -import -trustcacerts 
